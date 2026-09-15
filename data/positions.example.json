@@ -1,0 +1,18 @@
+[
+  {
+    "symbol": "510300",
+    "name": "沪深300ETF示例",
+    "asset_type": "etf",
+    "quantity": 100,
+    "avg_cost": 3.500,
+    "added_date": "2026-01-01"
+  },
+  {
+    "symbol": "518880",
+    "name": "黄金ETF示例",
+    "asset_type": "etf",
+    "quantity": 200,
+    "avg_cost": 5.000,
+    "added_date": "2026-01-01"
+  }
+]

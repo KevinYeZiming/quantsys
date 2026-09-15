@@ -1,0 +1,8 @@
+/* Quantsys dashboard — dark scrollbar & number tuning */
+:root { color-scheme: dark; }
+html, body, #root { height: 100%; }
+body { background: #09090b; }
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-thumb { background: #27272a; border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: #3f3f46; }
+::-webkit-scrollbar-track { background: transparent; }

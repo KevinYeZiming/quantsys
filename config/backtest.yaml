@@ -1,0 +1,17 @@
+initial_capital: 1000000.0
+commission: 0.00025         # 0.025% per side
+stamp_duty: 0.0005          # 0.05% on sells
+slippage: 0.001             # 0.1%
+risk_free_rate: 0.015       # Annual risk-free rate (1Y Shibor)
+
+# Benchmark index
+benchmark: "000300"         # CSI 300
+
+# Execution constraints
+t1_settlement: true         # T+1 settlement
+limit_up_down: true         # Check daily price limits
+min_commission: 5.0         # Minimum commission per trade (RMB)
+
+# Report settings
+output_dir: "reports"
+plots: true

@@ -1,0 +1,45 @@
+multifactor:
+  enabled: true
+  top_n_pct: 0.20           # Select top 20% of ranked stocks
+  min_stocks: 10            # Minimum number of stocks to hold
+  rebalance_frequency: "monthly"
+  factor_weights: "ic_ir"   # IC-IR weighted, or "equal", "manual"
+  # 真实 IC-IR 加权：先运行 scripts/evaluate_factors.py --save-weights
+  # 生成 data/factor_weights.csv，再把 weights_path 指过去（相对项目根目录或绝对路径）。
+  # 文件不存在时自动回退为等权。
+  weights_path: "data/factor_weights.csv"
+  # factor_weights: "manual" 时使用：{因子名: 权重}
+  manual_weights: {}
+  neutralization: ["industry", "size"]
+  weighting: "equal_weight" # or "market_cap"
+
+etf_rotation:
+  enabled: true
+  top_k: 5                  # Hold top 5 ETFs
+  momentum_period: 20
+  volatility_period: 60
+  allocation_method: "risk_parity"  # or "equal_weight", "momentum_weighted"
+  rebalance_frequency: "monthly"
+  core_satellite:
+    core_pct: 0.90          # 90% core portfolio
+    satellite_pct: 0.10     # 10% tactical rotation
+  etf_basket_file: ""       # If empty, use default basket
+
+trend_following:
+  enabled: true
+  universe: "csi500"        # or "csi300", "all"
+  short_ma: 20
+  long_ma: 60
+  breakout_period: 20
+  atr_multiplier: 2.0
+  atr_period: 14
+  max_positions: 20
+  risk_per_trade: 0.02      # 2% risk per trade
+
+industry_rotation:
+  enabled: true
+  top_industries: 5
+  stocks_per_industry: 3
+  momentum_period: 20
+  money_flow_period: 5
+  rebalance_frequency: "monthly"

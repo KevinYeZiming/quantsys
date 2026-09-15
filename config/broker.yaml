@@ -1,0 +1,30 @@
+# Galaxy Securities QMT broker configuration.
+# Credentials (username/password) are NOT stored here — they are
+# encrypted by quantsys.security.CredentialManager in .secrets/
+
+galaxy_qmt:
+  # Path to QMT userdata_mini directory
+  # Common locations: C:\Program Files\Galaxy\QMT\userdata_mini, D:\QMT\userdata_mini
+  qmt_path: ""
+
+  # QMT session ID (must match the session ID configured in QMT terminal)
+  session_id: 123456
+
+  # Broker account number (your Galaxy Securities trading account)
+  account_id: ""
+
+  # Trading limits
+  max_order_value: 1000000.0    # Max single order value (RMB)
+  max_position_pct: 0.10        # Max single stock position (10% of portfolio)
+  order_confirm: true           # Require manual confirmation before orders
+
+# Supported brokers — enable as needed
+brokers:
+  galaxy_qmt:
+    enabled: false              # Set to true when QMT terminal is set up
+    name: "银河证券 QMT"
+
+  # Future: add more brokers here
+  # huatai:
+  #   enabled: false
+  #   name: "华泰证券"

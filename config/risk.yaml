@@ -1,0 +1,25 @@
+limits:
+  max_position_pct: 0.10    # Max 10% of portfolio in single stock
+  max_sector_pct: 0.30      # Max 30% in single sector
+  max_drawdown: 0.20        # Stop trading if drawdown exceeds 20%
+  max_leverage: 1.0         # No leverage (long-only)
+
+position_sizing:
+  method: "volatility_target"  # volatility_target, equal_weight, kelly
+  target_volatility: 0.15      # 15% annual volatility target
+  max_position_count: 50       # Max number of simultaneous positions
+
+stop_loss:
+  trailing_atr:
+    enabled: true
+    atr_period: 14
+    multiplier: 2.0
+  trailing_pct:
+    enabled: true
+    pct: 0.08              # 8% trailing stop
+  time_stop:
+    enabled: false
+    max_holding_days: 60
+  max_drawdown_stop:
+    enabled: true
+    threshold: 0.20         # 20% portfolio max drawdown

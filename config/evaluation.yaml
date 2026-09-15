@@ -1,0 +1,72 @@
+# Quantitative Evaluation Configuration
+# 量化评估配置 — 适用于 1万元小资金 低频高置信度策略
+
+evaluation:
+  # Score weights for 5-dimensional cross-sectional evaluation
+  score_weights:
+    momentum: 0.25     # 5d/20d/60d return, vol-adjusted return
+    trend: 0.25        # MA alignment, RSI health, range position
+    valuation: 0.20    # Price in 52-week range, drawdown from high
+    liquidity: 0.15    # Volume trend, turnover, trade amount
+    factor: 0.15       # Composite of above four sub-scores
+
+  # Signal thresholds
+  buy_threshold: 65    # Score >= 65 → BUY
+  sell_threshold: 35   # Score <= 35 → SELL
+
+# Small capital constraints (1万 RMB)
+small_capital:
+  initial_capital: 10000.0
+  max_positions: 2           # At most 2 concurrent holdings
+  min_commission: 5.0        # A-share minimum commission per trade
+  stamp_duty: 0.0005         # 0.05% stamp duty on sells
+  lot_size: 100              # Must buy in multiples of 100 shares
+
+# Risk rules
+risk:
+  stop_loss_pct: -0.05       # Single position hard stop loss
+  trailing_stop_pct: -0.03   # Trailing stop from recent high
+  drawdown_halt: -0.10       # Portfolio drawdown → clear all, pause 1 week
+  monthly_trade_limit: 4     # Max round-trips per month
+  blacklist_after: 2         # Blacklist after N consecutive stop losses
+
+# Strategy parameters
+strategies:
+  momentum:
+    enabled: true
+    frequency: "weekly"       # Run every Friday after close
+    momentum_period: 20       # 20-day return ranking
+    rsi_min: 40
+    rsi_max: 70
+    volume_expand_ratio: 1.1  # 5-day avg > 20-day avg * 1.1
+    min_amount: 50000000      # Min 50M daily turnover (avoid manipulation)
+    hold_days: 5              # Hold for 5 trading days
+    position_pct: 1.0         # Full position (single stock for 1万)
+
+  mean_reversion:
+    enabled: true
+    frequency: "daily"
+    ma_period: 20
+    std_multiplier: 2.0       # Bollinger band: MA ± 2σ
+    rsi_oversold: 35
+    rsi_overbought: 65
+    min_volume: 1000000       # Min 1M daily volume
+    grid_layers: 3            # 3000/3000/4000 split
+    grid_spacing_pct: 0.02    # 2% between grid levels
+
+  event_driven:
+    enabled: true
+    frequency: "as_reported"
+    profit_yoy_min: 30        # Net profit YoY > 30%
+    revenue_yoy_min: 20        # Revenue YoY > 20%
+    pe_max: 50                 # PE < 50
+    pe_percentile: 0.3         # PE < 30th percentile of industry
+    hold_days: 5               # Hold until 5 days after announcement
+
+# Safe universe filter
+universe:
+  exclude_st: true             # Exclude ST/*ST
+  exclude_chi_next: true       # Exclude 300xxx (ChiNext)
+  exclude_star_market: true    # Exclude 688xxx (STAR)
+  max_price: 100               # Max stock price (affordable with 1万)
+  prefer_main_board: true      # 600/000/002 only

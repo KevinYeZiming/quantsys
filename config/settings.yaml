@@ -1,0 +1,27 @@
+project:
+  name: "中国A股量化交易系统"
+  base_dir: "/Volumes/ZimingYe/量化交易"
+
+data:
+  raw_dir: "data/raw"
+  processed_dir: "data/processed"
+  db_path: "data/metadata.db"
+  default_start: "2015-01-01"
+  universe_index: "000300"  # CSI 300
+
+sources:
+  primary: "akshare"
+  akshare_rate_limit: 1.0   # seconds between requests
+  retry_count: 3
+  retry_backoff: 2.0
+
+backtest:
+  initial_capital: 1000000.0
+  commission: 0.00025       # 0.025%
+  stamp_duty: 0.0005        # 0.05% on sells (halved since Aug 2023)
+  slippage: 0.001           # 0.1%
+  risk_free_rate: 0.015     # 1.5% (1Y Shibor approximation)
+
+performance:
+  n_jobs: 8
+  memory_cache_gb: 4

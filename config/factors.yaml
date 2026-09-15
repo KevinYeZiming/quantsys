@@ -1,0 +1,127 @@
+factors:
+  # === Value Factors (价值因子) ===
+  roe_ttm:
+    class: ROEFactor
+    category: value
+    enabled: true
+    periods: 4
+
+  roa_ttm:
+    class: ROAFactor
+    category: value
+    enabled: true
+    periods: 4
+
+  ep_ttm:
+    class: EPFactor
+    category: value
+    enabled: true
+
+  bp_lr:
+    class: BPFactor
+    category: value
+    enabled: true
+
+  cashflow_to_mv:
+    class: CFPFactor
+    category: value
+    enabled: true
+
+  # === Momentum Factors (动量因子) ===
+  momentum_12m_1m:
+    class: Momentum12M1M
+    category: momentum
+    enabled: true
+    skip_recent: 1
+    period: 12
+
+  momentum_60d:
+    class: Momentum60D
+    category: momentum
+    enabled: true
+    period: 60
+
+  reversal_5d:
+    class: ShortTermReversal
+    category: momentum
+    enabled: true
+    period: 5
+
+  # === Volatility Factors (波动率因子) ===
+  idiosyncratic_vol:
+    class: IdioVolatility
+    category: volatility
+    enabled: true
+    period: 60
+    half_life: 42
+
+  volatility_skew:
+    class: VolatilitySkew
+    category: volatility
+    enabled: true
+    period: 20
+
+  amplitude_20d:
+    class: Amplitude20D
+    category: volatility
+    enabled: true
+    period: 20
+
+  # === Liquidity Factors (流动性因子) ===
+  turnover_20d:
+    class: Turnover20D
+    category: liquidity
+    enabled: true
+    period: 20
+
+  volume_corr:
+    class: VolumeCorrelation
+    category: liquidity
+    enabled: true
+    period: 20
+
+  amihud_illiquidity:
+    class: AmihudIlliq
+    category: liquidity
+    enabled: true
+    period: 20
+
+  # === Technical Factors (技术因子) ===
+  rsi_14d:
+    class: RSIFactor
+    category: technical
+    enabled: true
+    period: 14
+
+  macd_divergence:
+    class: MACDDivergence
+    category: technical
+    enabled: true
+    fast: 12
+    slow: 26
+    signal: 9
+
+  ma_deviation:
+    class: MADeviation
+    category: technical
+    enabled: true
+    period: 60
+
+  # === Alternative Factors (另类因子) ===
+  smart_money:
+    class: SmartMoneyFlow
+    category: alternative
+    enabled: true
+    period: 10
+
+  str_factor:
+    class: SalienceTheory
+    category: alternative
+    enabled: true
+    period: 20
+
+  max_effect:
+    class: MaxEffect
+    category: alternative
+    enabled: true
+    period: 20

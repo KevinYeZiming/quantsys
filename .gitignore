@@ -1,0 +1,53 @@
+# Data
+data/raw/
+data/processed/
+data/metadata.db
+
+# Secrets (credentials, API keys)
+.secrets/
+!config/broker.yaml
+
+# Python
+__pycache__/
+*.py[cod]
+*.so
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Notebooks
+.ipynb_checkpoints/
+*.ipynb
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Reports
+reports/
+
+# Virtualenv
+venv/
+.venv/
+
+# Env
+.env
+.env.local
+
+# Cache
+.cache/
+*.parquet
+
+# --- Publication hygiene (added before GitHub push) ---
+# Machine-local agent settings
+.claude/settings.local.json
+# Personal portfolio data (keep local; see data/positions.example.json)
+data/positions.json
+data/trade_journal.db
+data/evaluations/
+data/metadata.db
