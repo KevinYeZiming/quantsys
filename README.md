@@ -112,13 +112,15 @@ python3 scripts/evaluate_assets.py --gold 518880,Au99.99        # 黄金
 
 ## 可视化仪表盘
 
-React + TypeScript + Tailwind 深色主题仪表盘（`dashboard/` 目录），可视化因子评估与买卖信号，可打包部署 GitHub Pages：
+React + TypeScript + Tailwind 深色主题仪表盘（`dashboard/` 目录），可视化因子评估与买卖信号。数据运行时加载，FastAPI 后端托管并提供「一键更新」：抓取最新行情 → 重新评估因子与信号 → 自动刷新页面，无需重新构建。
 
 ```bash
-cd dashboard && npm install && npm run dev   # http://localhost:3000
+cd dashboard && npm install && npm run build   # 首次或 UI 改动后构建
+
+cd .. && python3 scripts/serve_dashboard.py    # http://localhost:8000
 ```
 
-数据链路：`evaluate_factors.py` → `evaluate_assets.py` → `export_dashboard_data.py` → `dashboard/src/data/dashboard.json`（已随仓库提交示例数据，clone 即见真实结果）。详见 [dashboard/README.md](dashboard/README.md)。
+数据链路：`update_data.py` / `update_assets.py` → `evaluate_factors.py` → `evaluate_assets.py` → `export_dashboard_data.py` → `dashboard/public/data/dashboard.json`（一键更新自动串联；详见 [dashboard/README.md](dashboard/README.md)）。
 
 ## A股适配特性
 

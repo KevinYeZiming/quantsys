@@ -1,6 +1,6 @@
 project:
   name: "中国A股量化交易系统"
-  base_dir: "/Volumes/ZimingYe/量化交易"
+  base_dir: "/Users/ziming_ye/量化交易"
 
 data:
   raw_dir: "data/raw"

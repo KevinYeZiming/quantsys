@@ -1,14 +1,12 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Activity, FlaskConical, LayoutDashboard, Wallet } from 'lucide-react'
-import raw from '@/data/dashboard.json'
 import type { DashboardData } from '@/types/dashboard'
 import { Overview } from '@/sections/Overview'
 import { FactorLab } from '@/sections/FactorLab'
 import { Signals } from '@/sections/Signals'
 import { Holdings } from '@/sections/Holdings'
+import { UpdateButton } from '@/components/UpdateButton'
 import { cn } from '@/lib/utils'
-
-const data = raw as unknown as DashboardData
 
 type Tab = 'overview' | 'factors' | 'signals' | 'holdings'
 
@@ -24,6 +22,23 @@ export default function Home() {
     const h = window.location.hash.replace('#', '')
     return (TABS.some((t) => t.key === h) ? h : 'overview') as Tab
   })
+  const [data, setData] = useState<DashboardData | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  const load = useCallback(async () => {
+    try {
+      const res = await fetch('data/dashboard.json', { cache: 'no-store' })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      setData((await res.json()) as DashboardData)
+      setError(null)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    }
+  }, [])
+
+  useEffect(() => {
+    load()
+  }, [load])
 
   // keep URL hash in sync so views are deep-linkable (and headlessly testable)
   useEffect(() => {
@@ -60,28 +75,41 @@ export default function Home() {
             ))}
           </nav>
 
+          <UpdateButton onUpdated={load} />
+
           <div className="hidden text-right text-[11px] leading-tight text-zinc-500 sm:block">
             <p>数据生成于</p>
-            <p className="tabular-nums text-zinc-400">{data.generated_at}</p>
+            <p className="tabular-nums text-zinc-400">{data?.generated_at ?? '—'}</p>
           </div>
         </div>
       </header>
 
       {/* Main */}
       <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
-        {tab === 'overview' && (
+        {error && (
+          <div className="mb-6 rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-300">
+            无法加载数据文件 data/dashboard.json（{error}）。
+            请先运行 python3 scripts/export_dashboard_data.py 生成数据。
+          </div>
+        )}
+        {!data && !error && (
+          <div className="flex h-64 items-center justify-center text-sm text-zinc-500">
+            正在加载数据…
+          </div>
+        )}
+        {data && tab === 'overview' && (
           <Overview data={data}
             onGoFactors={() => setTab('factors')}
             onGoSignals={() => setTab('signals')} />
         )}
-        {tab === 'factors' && <FactorLab data={data} />}
-        {tab === 'signals' && <Signals data={data} />}
-        {tab === 'holdings' && <Holdings data={data} />}
+        {data && tab === 'factors' && <FactorLab data={data} />}
+        {data && tab === 'signals' && <Signals data={data} />}
+        {data && tab === 'holdings' && <Holdings data={data} />}
       </main>
 
       <footer className="border-t border-zinc-800/60 py-6 text-center text-xs text-zinc-600">
         Quantsys · 本仪表盘为研究工具输出，不构成投资建议 ·
-        刷新数据：evaluate_factors.py → evaluate_assets.py → export_dashboard_data.py
+        点击右上角「一键更新」抓取最新行情并重新评估
       </footer>
     </div>
   )

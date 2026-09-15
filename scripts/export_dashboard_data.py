@@ -7,10 +7,13 @@ imports at build time. Re-run after any evaluation to refresh the UI:
 
     python3 scripts/export_dashboard_data.py
 
-Output: dashboard/src/data/dashboard.json
+Output: dashboard/public/data/dashboard.json
+(also mirrored to dashboard/dist/data/dashboard.json when a build exists,
+so the FastAPI server can serve fresh data without rebuilding)
 """
 
 import json
+import shutil
 import sys
 from pathlib import Path
 
@@ -20,7 +23,8 @@ import pandas as pd
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 PROJECT_ROOT = Path(__file__).parent.parent
-DASHBOARD_DATA = PROJECT_ROOT / "dashboard" / "src" / "data" / "dashboard.json"
+DASHBOARD_DATA = PROJECT_ROOT / "dashboard" / "public" / "data" / "dashboard.json"
+DIST_DATA = PROJECT_ROOT / "dashboard" / "dist" / "data" / "dashboard.json"
 
 
 def clean(v):
@@ -101,6 +105,8 @@ def main():
         json.dumps(data, ensure_ascii=False, separators=(",", ":")),
         encoding="utf-8",
     )
+    if DIST_DATA.parent.exists():
+        shutil.copyfile(DASHBOARD_DATA, DIST_DATA)
     size_kb = DASHBOARD_DATA.stat().st_size / 1024
     print(f"Dashboard data written: {DASHBOARD_DATA} "
           f"({size_kb:.0f} KB, {len(data['factor_summary'])} factors, "

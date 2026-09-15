@@ -21,9 +21,24 @@ Quantsys 量化交易系统的可视化仪表盘：因子有效性评估 · 股/
 
 ## 快速开始
 
+推荐方式：FastAPI 后端托管构建产物 + 一键更新接口（数据在运行时加载，更新后无需重新构建）：
+
+```bash
+cd dashboard
+npm install
+npm run build
+
+cd ..
+python3 scripts/serve_dashboard.py    # http://localhost:8000
+```
+
+打开页面后点击右上角「一键更新」按钮，即可自动完成：更新股票行情 → 更新基金数据 → 更新黄金数据 → 重新评估因子 → 重新生成买卖信号 → 刷新页面数据（实时显示每步进度）。
+
+纯前端开发模式（需另开终端起后端以使用一键更新）：
+
 ```bash
 npm install
-npm run dev        # http://localhost:3000
+npm run dev        # http://localhost:3000，/api 自动代理到 8000
 ```
 
 ```bash
@@ -33,8 +48,7 @@ npm run preview    # 本地预览构建产物
 
 ## 数据从哪来
 
-仪表盘本身不联网，数据来自构建期打包的 `src/data/dashboard.json`，
-由系统脚本一键导出（已随仓库提交，clone 即可看到真实示例数据）：
+仪表盘本身不联网，数据来自运行时加载的 `data/dashboard.json`（构建时从 `public/` 拷贝到 `dist/`，一键更新后直接重写该文件），由系统脚本导出：
 
 ```bash
 # 在项目根目录（dashboard 的上级目录）依次运行：
@@ -43,7 +57,7 @@ python3 scripts/evaluate_assets.py --positions                          # 买卖
 python3 scripts/export_dashboard_data.py                                # 导出 dashboard.json
 ```
 
-刷新数据后重新 `npm run dev`（或 `npm run build`）即可。
+点击「一键更新」即自动执行以上步骤外加行情抓取，无需手动操作。
 
 ## 部署到 GitHub Pages
 
@@ -58,12 +72,12 @@ npm run build
 
 ```
 dashboard/
+├── public/data/dashboard.json     # 运行时数据（由 export_dashboard_data.py 生成，构建时拷入 dist/）
 ├── src/
-│   ├── data/dashboard.json      # 打包数据（由 export_dashboard_data.py 生成）
-│   ├── sections/                # 总览 / 因子实验室 / 买卖信号 / 持仓
-│   ├── components/              # 相关性热力图等自定义组件 + shadcn/ui
-│   └── pages/Home.tsx           # 入口布局与导航（支持 #hash 深链接）
-├── docs/screenshots/            # 预览截图
+│   ├── sections/                  # 总览 / 因子实验室 / 买卖信号 / 持仓
+│   ├── components/                # 更新按钮、相关性热力图等 + shadcn/ui
+│   └── pages/Home.tsx             # 入口布局与导航（运行时 fetch 数据，支持 #hash 深链接）
+├── docs/screenshots/              # 预览截图
 └── index.html
 ```
 
