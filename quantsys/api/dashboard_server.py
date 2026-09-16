@@ -19,6 +19,7 @@ import json
 import subprocess
 import sys
 import time
+import uuid
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
@@ -30,6 +31,7 @@ PROJECT_ROOT = Path(__file__).parent.parent.parent
 DASHBOARD_JSON = PROJECT_ROOT / "dashboard" / "dist" / "data" / "dashboard.json"
 DIST_DIR = PROJECT_ROOT / "dashboard" / "dist"
 POSITIONS_FILE = PROJECT_ROOT / "data" / "positions.json"
+TRADES_FILE = PROJECT_ROOT / "data" / "trades.json"
 
 VALID_ASSET_TYPES = {"stock": "股票", "etf": "ETF", "fund": "场外基金", "gold": "黄金"}
 
@@ -45,7 +47,7 @@ app.add_middleware(
         "http://localhost:8000",
         "http://127.0.0.1:8000",
     ],
-    allow_methods=["GET", "POST"],
+    allow_methods=["GET", "POST", "DELETE"],
     allow_headers=["*"],
 )
 
@@ -195,6 +197,158 @@ async def api_save_positions(request: Request):
     except asyncio.TimeoutError:
         proc.kill()
     return {"ok": True, "count": len(positions), "exported": proc.returncode == 0}
+
+
+# ---------------------------------------------------------------- trades ----
+
+def _load_trades() -> list[dict]:
+    if TRADES_FILE.exists():
+        return json.loads(TRADES_FILE.read_text(encoding="utf-8"))
+    # 首次使用：把当前持仓导入为期初买入记录，保证后续重建不丢持仓
+    if POSITIONS_FILE.exists():
+        seeds = []
+        for p in json.loads(POSITIONS_FILE.read_text(encoding="utf-8")):
+            seeds.append({
+                "id": uuid.uuid4().hex[:12],
+                "date": p.get("added_date") or "2026-01-01",
+                "symbol": p["symbol"],
+                "name": p.get("name", p["symbol"]),
+                "asset_type": p.get("asset_type", "etf"),
+                "side": "buy",
+                "quantity": p.get("quantity", 0),
+                "price": p.get("avg_cost", 0),
+                "note": "期初持仓导入",
+            })
+        if seeds:
+            TRADES_FILE.write_text(
+                json.dumps(seeds, ensure_ascii=False, indent=2), encoding="utf-8"
+            )
+            return seeds
+    return []
+
+
+def _rebuild_positions(trades: list[dict]) -> list[dict]:
+    """由交易记录按移动加权平均法重建持仓。
+
+    买入累加数量与成本总额；卖出按卖出时点的平均成本扣减成本总额与数量，
+    数量归零的标的不出现在持仓中。
+    """
+    by_symbol: dict[str, dict] = {}
+    for t in sorted(trades, key=lambda x: (x.get("date", ""), x.get("id", ""))):
+        sym = t["symbol"]
+        pos = by_symbol.setdefault(sym, {
+            "symbol": sym, "name": t.get("name") or sym,
+            "asset_type": t.get("asset_type") or "etf",
+            "quantity": 0.0, "cost_total": 0.0,
+            "added_date": t.get("date", ""),
+        })
+        if t.get("name"):
+            pos["name"] = t["name"]
+        if t.get("asset_type"):
+            pos["asset_type"] = t["asset_type"]
+        q, p = float(t["quantity"]), float(t["price"])
+        if t["side"] == "buy":
+            pos["cost_total"] += q * p
+            pos["quantity"] += q
+        else:  # sell
+            avg = pos["cost_total"] / pos["quantity"] if pos["quantity"] > 0 else p
+            pos["cost_total"] -= avg * q
+            pos["quantity"] -= q
+    out = []
+    for pos in by_symbol.values():
+        if pos["quantity"] > 1e-9:
+            out.append({
+                "symbol": pos["symbol"],
+                "name": pos["name"],
+                "asset_type": pos["asset_type"],
+                "quantity": round(pos["quantity"], 6),
+                "avg_cost": round(pos["cost_total"] / pos["quantity"], 6),
+                "added_date": pos["added_date"],
+            })
+    return sorted(out, key=lambda x: x["symbol"])
+
+
+def _validate_trade(p: dict) -> dict:
+    if not isinstance(p, dict):
+        raise HTTPException(400, "交易记录格式错误")
+    symbol = str(p.get("symbol", "")).strip()
+    if not symbol or len(symbol) > 12:
+        raise HTTPException(400, f"代码无效：「{symbol}」（股票/ETF/基金为 6 位数字，黄金如 Au99.99）")
+    side = str(p.get("side", "")).strip()
+    if side not in ("buy", "sell"):
+        raise HTTPException(400, "方向必须是 buy 或 sell")
+    try:
+        quantity, price = float(p.get("quantity")), float(p.get("price"))
+    except (TypeError, ValueError):
+        raise HTTPException(400, "数量与价格必须是数字")
+    if quantity <= 0 or price <= 0:
+        raise HTTPException(400, "数量与价格必须大于 0")
+    date = str(p.get("date", "")).strip()
+    if len(date) != 10 or date[4] != "-" or date[7] != "-":
+        raise HTTPException(400, f"日期格式必须为 YYYY-MM-DD，当前为「{date}」")
+    return {
+        "id": str(p.get("id") or uuid.uuid4().hex[:12]),
+        "date": date,
+        "symbol": symbol,
+        "name": str(p.get("name", symbol)).strip(),
+        "asset_type": str(p.get("asset_type", "etf")).strip() or "etf",
+        "side": side,
+        "quantity": quantity,
+        "price": price,
+        "note": str(p.get("note", "")).strip(),
+    }
+
+
+async def _persist_trades(trades: list[dict]) -> dict:
+    """写交易文件、重建持仓并重新导出仪表盘数据。"""
+    tmp = TRADES_FILE.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(trades, ensure_ascii=False, indent=2), encoding="utf-8")
+    tmp.replace(TRADES_FILE)
+    positions = _rebuild_positions(trades)
+    tmp = POSITIONS_FILE.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(positions, ensure_ascii=False, indent=2), encoding="utf-8")
+    tmp.replace(POSITIONS_FILE)
+    proc = await asyncio.create_subprocess_exec(
+        sys.executable, "scripts/export_dashboard_data.py",
+        cwd=str(PROJECT_ROOT),
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.STDOUT,
+    )
+    try:
+        await asyncio.wait_for(proc.wait(), timeout=120)
+    except asyncio.TimeoutError:
+        proc.kill()
+    return {"positions": positions, "exported": proc.returncode == 0}
+
+
+@app.get("/api/trades")
+def api_get_trades():
+    return sorted(_load_trades(), key=lambda t: (t.get("date", ""), t.get("id", "")), reverse=True)
+
+
+@app.post("/api/trades")
+async def api_add_trade(request: Request):
+    global _running
+    if _running:
+        raise HTTPException(409, "更新进行中，请等待完成后再记交易")
+    trade = _validate_trade(await request.json())
+    trades = _load_trades()
+    trades.append(trade)
+    result = await _persist_trades(trades)
+    return {"ok": True, "trade": trade, **result}
+
+
+@app.delete("/api/trades/{trade_id}")
+async def api_delete_trade(trade_id: str):
+    global _running
+    if _running:
+        raise HTTPException(409, "更新进行中，请等待完成后再操作")
+    trades = _load_trades()
+    remaining = [t for t in trades if t.get("id") != trade_id]
+    if len(remaining) == len(trades):
+        raise HTTPException(404, f"交易记录不存在：{trade_id}")
+    result = await _persist_trades(remaining)
+    return {"ok": True, "deleted": trade_id, **result}
 
 
 @app.get("/api/status")

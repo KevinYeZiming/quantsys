@@ -51,3 +51,4 @@ data/positions.json
 data/trade_journal.db
 data/evaluations/
 data/metadata.db
+data/trades.json
