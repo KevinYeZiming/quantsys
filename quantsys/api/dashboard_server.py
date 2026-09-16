@@ -87,7 +87,7 @@ _last_heartbeat = 0.0
 _current_proc: "asyncio.subprocess.Process | None" = None
 _watchdog_started = False
 
-HEARTBEAT_TIMEOUT = 30  # 秒：前端心跳中断超过此时长即判定页面失联
+HEARTBEAT_TIMEOUT = 90  # 秒。需大于浏览器后台标签页的激进定时器节流（约 60 秒）
 
 
 async def _watchdog():
@@ -113,6 +113,18 @@ async def _watchdog():
 def api_heartbeat():
     global _last_heartbeat
     _last_heartbeat = time.monotonic()
+    return {"ok": True}
+
+
+@app.post("/api/bye")
+def api_bye():
+    """页面关闭时前端 sendBeacon 调用：将心跳回拨 60 秒。
+
+    若有其他标签页仍在发送心跳，下一次心跳会覆盖此值，不会误杀；
+    否则看门狗将在 30 秒内（HEARTBEAT_TIMEOUT=90）清理更新。
+    """
+    global _last_heartbeat
+    _last_heartbeat = min(_last_heartbeat, time.monotonic() - 60)
     return {"ok": True}
 
 
@@ -189,10 +201,12 @@ def api_update():
                         break
                     try:
                         line = await asyncio.wait_for(
-                            proc.stdout.readline(), timeout=min(remaining, 15.0)
+                            proc.stdout.readline(), timeout=min(remaining, 5.0)
                         )
                     except asyncio.TimeoutError:
-                        # 长时间无输出：若进程已退出则收尾，否则继续等
+                        # 无输出期间发送 SSE 注释作心跳：若写入失败（客户端已断开）
+                        # 异常会向上传播并触发 CancelledError 清理逻辑
+                        yield ": ping\n\n"
                         if proc.returncode is not None:
                             break
                         continue

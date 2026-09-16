@@ -61,11 +61,19 @@ export function UpdateButton({ onUpdated }: UpdateButtonProps) {
     setOpen(true)
     setStartedAt(Date.now())
 
-    // 心跳：运行期间每 10 秒告知后端页面仍在，失联超 30 秒后端自动终止更新
+    // 心跳：运行期间每 10 秒告知后端页面仍在，失联超 90 秒后端自动终止更新。
+    // 页面切回前台时立即补发一次（后台标签页定时器会被浏览器节流）。
     const beat = () => fetch('/api/heartbeat', { method: 'POST' }).catch(() => {})
     beat()
     const hb = setInterval(beat, 10000)
     hbRef.current = hb
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') beat()
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    // 页面关闭：sendBeacon 让后端立刻判定失联（beforeunload 中 fetch 不可用）
+    const onUnload = () => navigator.sendBeacon('/api/bye')
+    window.addEventListener('beforeunload', onUnload)
 
     const es = new EventSource('/api/update')
     esRef.current = es
@@ -73,6 +81,8 @@ export function UpdateButton({ onUpdated }: UpdateButtonProps) {
     const stopHb = () => {
       clearInterval(hb)
       hbRef.current = null
+      document.removeEventListener('visibilitychange', onVisible)
+      window.removeEventListener('beforeunload', onUnload)
     }
 
     es.addEventListener('step', (ev) => {
