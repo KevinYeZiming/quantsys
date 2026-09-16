@@ -104,7 +104,7 @@ export default function Home() {
         )}
         {data && tab === 'factors' && <FactorLab data={data} />}
         {data && tab === 'signals' && <Signals data={data} />}
-        {data && tab === 'holdings' && <Holdings data={data} />}
+        {data && tab === 'holdings' && <Holdings data={data} onPositionsChanged={load} />}
       </main>
 
       <footer className="border-t border-zinc-800/60 py-6 text-center text-xs text-zinc-600">

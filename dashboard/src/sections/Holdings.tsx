@@ -1,7 +1,8 @@
 import type { DashboardData } from '@/types/dashboard'
 import { ActionBadge, ASSET_LABEL, Card, CardHeader, FmtPct } from '@/components/bits'
+import { PositionEditor } from '@/components/PositionEditor'
 
-export function Holdings({ data }: { data: DashboardData }) {
+export function Holdings({ data, onPositionsChanged }: { data: DashboardData; onPositionsChanged: () => void }) {
   const evalBySymbol = new Map(data.evaluations.map((e) => [e.symbol, e]))
   const rows = data.positions.map((p) => ({ pos: p, ev: evalBySymbol.get(p.symbol) }))
 
@@ -36,7 +37,11 @@ export function Holdings({ data }: { data: DashboardData }) {
       </div>
 
       <Card className="overflow-hidden">
-        <CardHeader title="持仓明细" sub="现价与信号来自最近一次统一买卖评估（evaluate_assets）" />
+        <CardHeader
+          title="持仓明细"
+          sub="现价与信号来自最近一次统一买卖评估（evaluate_assets）"
+          right={<PositionEditor positions={data.positions} onSaved={onPositionsChanged} />}
+        />
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="border-b border-zinc-800 text-[11px] uppercase tracking-wider text-zinc-500">

@@ -21,7 +21,7 @@ import sys
 import time
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -29,6 +29,9 @@ from fastapi.staticfiles import StaticFiles
 PROJECT_ROOT = Path(__file__).parent.parent.parent
 DASHBOARD_JSON = PROJECT_ROOT / "dashboard" / "dist" / "data" / "dashboard.json"
 DIST_DIR = PROJECT_ROOT / "dashboard" / "dist"
+POSITIONS_FILE = PROJECT_ROOT / "data" / "positions.json"
+
+VALID_ASSET_TYPES = {"stock": "股票", "etf": "ETF", "fund": "场外基金", "gold": "黄金"}
 
 app = FastAPI(title="Quantsys Dashboard Server", docs_url=None, redoc_url=None)
 
@@ -42,7 +45,7 @@ app.add_middleware(
         "http://localhost:8000",
         "http://127.0.0.1:8000",
     ],
-    allow_methods=["GET"],
+    allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
 
@@ -126,6 +129,72 @@ def api_bye():
     global _last_heartbeat
     _last_heartbeat = min(_last_heartbeat, time.monotonic() - 60)
     return {"ok": True}
+
+
+def _validate_positions(payload) -> list[dict]:
+    if not isinstance(payload, list):
+        raise HTTPException(400, "持仓数据必须是数组")
+    cleaned, seen = [], set()
+    for i, p in enumerate(payload):
+        if not isinstance(p, dict):
+            raise HTTPException(400, f"第 {i + 1} 条持仓格式错误")
+        symbol = str(p.get("symbol", "")).strip()
+        if not (len(symbol) == 6 and symbol.isdigit()):
+            raise HTTPException(400, f"第 {i + 1} 条：代码必须是 6 位数字，当前为「{symbol}」")
+        if symbol in seen:
+            raise HTTPException(400, f"代码 {symbol} 重复")
+        seen.add(symbol)
+        asset_type = str(p.get("asset_type", "")).strip()
+        if asset_type not in VALID_ASSET_TYPES:
+            raise HTTPException(400, f"{symbol}：类型必须是 {list(VALID_ASSET_TYPES)} 之一")
+        try:
+            quantity = float(p.get("quantity"))
+            avg_cost = float(p.get("avg_cost"))
+        except (TypeError, ValueError):
+            raise HTTPException(400, f"{symbol}：数量与成本必须是数字")
+        if quantity <= 0 or avg_cost <= 0:
+            raise HTTPException(400, f"{symbol}：数量与成本必须大于 0")
+        cleaned.append({
+            "symbol": symbol,
+            "name": str(p.get("name", symbol)).strip() or symbol,
+            "asset_type": asset_type,
+            "quantity": quantity,
+            "avg_cost": avg_cost,
+            "added_date": str(p.get("added_date", "")).strip() or time.strftime("%Y-%m-%d"),
+        })
+    return cleaned
+
+
+@app.get("/api/positions")
+def api_get_positions():
+    if POSITIONS_FILE.exists():
+        return json.loads(POSITIONS_FILE.read_text(encoding="utf-8"))
+    return []
+
+
+@app.post("/api/positions")
+async def api_save_positions(request: Request):
+    global _running
+    if _running:
+        raise HTTPException(409, "更新进行中，请等待完成后再编辑持仓")
+    positions = _validate_positions(await request.json())
+    tmp = POSITIONS_FILE.with_suffix(".json.tmp")
+    tmp.write_text(
+        json.dumps(positions, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+    tmp.replace(POSITIONS_FILE)
+    # 重新导出 dashboard.json，让页面立即反映持仓变化
+    proc = await asyncio.create_subprocess_exec(
+        sys.executable, "scripts/export_dashboard_data.py",
+        cwd=str(PROJECT_ROOT),
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.STDOUT,
+    )
+    try:
+        await asyncio.wait_for(proc.wait(), timeout=120)
+    except asyncio.TimeoutError:
+        proc.kill()
+    return {"ok": True, "count": len(positions), "exported": proc.returncode == 0}
 
 
 @app.get("/api/status")
