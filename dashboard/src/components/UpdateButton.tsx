@@ -12,6 +12,8 @@ interface Step {
   logTail?: string[]
 }
 
+const MAX_LOG_LINES = 30
+
 interface UpdateButtonProps {
   /** called when the pipeline finished so the parent reloads dashboard.json */
   onUpdated: () => void
@@ -22,23 +24,56 @@ export function UpdateButton({ onUpdated }: UpdateButtonProps) {
   const [running, setRunning] = useState(false)
   const [steps, setSteps] = useState<Step[]>([])
   const [finishedAt, setFinishedAt] = useState<string | null>(null)
+  const [startedAt, setStartedAt] = useState<number | null>(null)
+  const [now, setNow] = useState<number>(Date.now())
+  const [interrupted, setInterrupted] = useState(false)
   const esRef = useRef<EventSource | null>(null)
+  const hbRef = useRef<number | null>(null)
 
-  useEffect(() => () => esRef.current?.close(), [])
+  useEffect(
+    () => () => {
+      esRef.current?.close()
+      if (hbRef.current != null) clearInterval(hbRef.current)
+    },
+    [],
+  )
 
-  const patchStep = (id: string, patch: Partial<Step>) =>
-    setSteps((prev) => prev.map((s) => (s.id === id ? { ...s, ...patch } : s)))
+  // 运行中每秒刷新一次计时
+  useEffect(() => {
+    if (!running) return
+    const t = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(t)
+  }, [running])
+
+  const elapsed = () => {
+    if (startedAt == null) return ''
+    const s = Math.floor((now - startedAt) / 1000)
+    return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`
+  }
 
   const start = () => {
     if (running) return
     esRef.current?.close()
     setSteps([])
     setFinishedAt(null)
+    setInterrupted(false)
     setRunning(true)
     setOpen(true)
+    setStartedAt(Date.now())
+
+    // 心跳：运行期间每 10 秒告知后端页面仍在，失联超 30 秒后端自动终止更新
+    const beat = () => fetch('/api/heartbeat', { method: 'POST' }).catch(() => {})
+    beat()
+    const hb = setInterval(beat, 10000)
+    hbRef.current = hb
 
     const es = new EventSource('/api/update')
     esRef.current = es
+
+    const stopHb = () => {
+      clearInterval(hb)
+      hbRef.current = null
+    }
 
     es.addEventListener('step', (ev) => {
       const msg = JSON.parse((ev as MessageEvent).data)
@@ -47,16 +82,28 @@ export function UpdateButton({ onUpdated }: UpdateButtonProps) {
           ? prev.map((s) => (s.id === msg.id ? { ...s, ...msg } : s))
           : [...prev, { status: 'pending', ...msg }],
       )
-      if (msg.status === 'running') patchStep(msg.id, { status: 'running' })
+    })
+    // 实时追加子进程输出，让用户看到逐只股票的进度
+    es.addEventListener('log', (ev) => {
+      const msg = JSON.parse((ev as MessageEvent).data)
+      setSteps((prev) =>
+        prev.map((s) =>
+          s.id === msg.id
+            ? { ...s, logTail: [...(s.logTail ?? []), msg.line].slice(-MAX_LOG_LINES) }
+            : s,
+        ),
+      )
     })
     es.addEventListener('done', () => {
       es.close()
+      stopHb()
       setRunning(false)
       setFinishedAt(new Date().toLocaleTimeString())
       onUpdated()
     })
     es.addEventListener('error', (ev) => {
       es.close()
+      stopHb()
       setRunning(false)
       if (ev instanceof MessageEvent) {
         try {
@@ -68,6 +115,9 @@ export function UpdateButton({ onUpdated }: UpdateButtonProps) {
         } catch {
           /* malformed payload — ignore */
         }
+      } else {
+        // 连接中断（关页面/合盖休眠/服务重启）
+        setInterrupted(true)
       }
     })
   }
@@ -90,18 +140,25 @@ export function UpdateButton({ onUpdated }: UpdateButtonProps) {
         ) : (
           <RefreshCw className="h-3.5 w-3.5" />
         )}
-        <span className="hidden sm:inline">{running ? '更新中…' : '一键更新'}</span>
+        <span className="hidden sm:inline">
+          {running ? `更新中 ${elapsed()}` : '一键更新'}
+        </span>
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full z-50 mt-2 w-80 rounded-xl border border-zinc-800 bg-zinc-900/95 p-4 shadow-xl backdrop-blur">
-          <p className="mb-3 text-xs font-medium uppercase tracking-wider text-zinc-500">
-            数据更新流水线
-          </p>
+        <div className="absolute right-0 top-full z-50 mt-2 w-96 max-w-[90vw] rounded-xl border border-zinc-800 bg-zinc-900/95 p-4 shadow-xl backdrop-blur">
+          <div className="mb-3 flex items-center justify-between">
+            <p className="text-xs font-medium uppercase tracking-wider text-zinc-500">
+              数据更新流水线
+            </p>
+            {running && (
+              <p className="text-xs tabular-nums text-amber-400">{elapsed()}</p>
+            )}
+          </div>
           {steps.length === 0 && (
             <p className="text-sm text-zinc-400">正在启动…</p>
           )}
-          <ul className="space-y-2">
+          <ul className="max-h-96 space-y-2 overflow-y-auto">
             {steps.map((s) => (
               <li key={s.id}>
                 <div className="flex items-start gap-2">
@@ -141,7 +198,7 @@ export function UpdateButton({ onUpdated }: UpdateButtonProps) {
                       )}
                     </p>
                     {s.logTail && s.logTail.length > 0 && (
-                      <pre className="mt-1 max-h-24 overflow-y-auto whitespace-pre-wrap break-all rounded bg-zinc-950/70 p-1.5 text-[10px] leading-relaxed text-zinc-500">
+                      <pre className="mt-1 max-h-32 overflow-y-auto whitespace-pre-wrap break-all rounded bg-zinc-950/70 p-1.5 text-[10px] leading-relaxed text-zinc-500">
                         {s.logTail.join('\n')}
                       </pre>
                     )}
@@ -150,7 +207,12 @@ export function UpdateButton({ onUpdated }: UpdateButtonProps) {
               </li>
             ))}
           </ul>
-          {finishedAt && (
+          {interrupted && (
+            <p className="mt-3 border-t border-zinc-800 pt-2 text-xs text-amber-400">
+              连接已中断（页面关闭、合盖休眠或服务重启）。可重新点击「一键更新」继续。
+            </p>
+          )}
+          {finishedAt && !interrupted && (
             <p className="mt-3 border-t border-zinc-800 pt-2 text-xs text-emerald-400">
               更新完成 · 数据已刷新（{finishedAt}）
             </p>
